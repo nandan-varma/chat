@@ -15,7 +15,9 @@ export default function Component({ params }: { params: { RoomID: string } }) {
   const router = useRouter();
   const [messages, SetMessages] = useState<Msg[]>([]);
   useEffect(() => {
-    GetMessagesFromFirebase(params.RoomID, SetMessages);
+    if(params.RoomID){
+      GetMessagesFromFirebase(params.RoomID, SetMessages);
+    }
   }, [])
   useEffect(() => {
     let email = user?.email

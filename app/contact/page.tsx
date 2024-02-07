@@ -10,7 +10,7 @@ export default function Component() {
     <Card className="border border-gray-200 shadow-lg p-6 mx-auto max-w-md">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Contact Us</CardTitle>
-        <CardDescription>Fill out the form below and we'll get back to you as soon as possible.</CardDescription>
+        <CardDescription>Fill out the form below and we will get back to you as soon as possible.</CardDescription>
       </CardHeader>
       <CardContent>
         <form className="space-y-4">
