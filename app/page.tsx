@@ -1,32 +1,8 @@
-'use client'
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
+'use server'
 import { Button } from "@/components/ui/button"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 
-const FormSchema = z.object({
-  UserName: z.string(),
-  RoomID: z.string(),
-})
-
-export default function Component() {
-  const router = useRouter();
-  // const biscuits = cookies()
-  const form = useForm<z.infer<typeof FormSchema>>({
-    resolver: zodResolver(FormSchema),
-    // defaultValues: {
-    //   UserName: "NV",
-    //   RoomID: "1",
-    // },
-  })
-
-  function onSubmit(data: z.infer<typeof FormSchema>) {
-    // biscuits.set('username',form.getValues().UserName);
-    router.push(`/room/${form.getValues().RoomID}`);
-  }
-
+export default async function Component() {
   return (
     <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48">
       <div className="container px-4 md:px-6">

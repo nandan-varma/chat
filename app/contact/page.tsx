@@ -1,8 +1,3 @@
-/**
- * v0 by Vercel.
- * @see https://v0.dev/t/WgOJpHKCwjj
- * Documentation: https://v0.dev/docs#integrating-generated-code-into-your-nextjs-app
- */
 'use client'
 import { CardTitle, CardDescription, CardHeader, CardContent, CardFooter, Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
