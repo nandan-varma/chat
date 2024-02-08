@@ -39,7 +39,7 @@ export function SendMessage({ room_id, username, SendNewMessage }: SendMessagePr
     }
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="border-t p-2 flex items-center gap-2">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="border-t p-2 flex items-center gap-2 sticky bottom-0 backdrop-blur-md">
             <Input className="flex-1 bg-background" placeholder="Type a message" {...form.register("content")} />
             <Button type="submit">Send</Button>
         </form>

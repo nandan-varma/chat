@@ -31,7 +31,7 @@ export function MessageList({ username, msgs }: MessageListProps) {
           </div> :
           // other messages
           <div key={msg.id} className="flex items-end gap-2 mb-4">
-            <Avatar className="h-10 w-10">
+            <Avatar className="h-10 w-10 z-0">
               <AvatarImage alt={msg.sender} src="/placeholder-avatar.jpg" />
               <AvatarFallback className="bg-secondary font-bold">{msg.sender.substring(0,2)}</AvatarFallback>
             </Avatar>

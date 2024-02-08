@@ -37,8 +37,8 @@ export default function Component({ params }: { params: { RoomID: string } }) {
     <div className="grid h-screen grid-cols-[200px_1fr]">
       <RoomList />
       <div className="flex flex-col">
-        <div className="border-b p-2">
-          <h2 className="text-2xl text-center font-bold">Room ID: <span className="text-primary">{params.RoomID}</span></h2>
+        <div className="p-2 fixed backdrop-blur-md">
+          <h2 className="text-2xl font-bold">Room ID: <span className="text-primary">{params.RoomID}</span></h2>
         </div>
         <MessageList username={userName} msgs={messages} />
         {user ? <SendMessage

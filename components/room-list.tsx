@@ -66,7 +66,7 @@ export function RoomList() {
   // const data = getData();
   return (
     <div className="border-r bg-background">
-      <div className="flex flex-col gap-4 py-2">
+      <div className="flex flex-col gap-4 py-2 fixed">
         <h2 className="p-5 text-3xl font-bold text-center">Rooms</h2>
         <nav className="grid gap-2 px-4">
           {/* rooms list */}

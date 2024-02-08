@@ -1,5 +1,6 @@
 import { AuthProvider } from "@/components/auth-provider";
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster";
 
 /* Core */
 // import { Provider } from "react-redux";
@@ -23,6 +24,7 @@ export default function Providers({ children }: Readonly<{ children: React.React
                 <AuthProvider>
                     {children}
                 </AuthProvider>
+                <Toaster/>
             {/* </ThemeProvider> */}
         </>
     )
