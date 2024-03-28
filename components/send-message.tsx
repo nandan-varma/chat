@@ -1,4 +1,4 @@
-'use client'
+'use server'
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -18,7 +18,7 @@ interface SendMessageProps {
     SendNewMessage: ((msg: Msg) => void)
 }
 
-export function SendMessage({ room_id, username, SendNewMessage }: SendMessageProps) {
+export async function SendMessage({ room_id, username, SendNewMessage }: SendMessageProps) {
     const form = useForm<z.infer<typeof FormSchema>>({
         resolver: zodResolver(FormSchema),
         defaultValues: {

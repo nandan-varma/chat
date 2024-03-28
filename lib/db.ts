@@ -1,43 +1,47 @@
-// import { Pool, neonConfig } from '@neondatabase/serverless';
-// import ws from 'ws';
-
-// // Configure WebSocket support
-// neonConfig.webSocketConstructor = ws;
-
-// const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-// pool.on('error', err => console.error(err));  // deal with e.g. re-connect
-
-// const client = await pool.connect();
-
-// try {
-//   // Listen for notifications
-//   client.on('notification', async (msg) => {
-//     const { rows } = await client.query('SELECT * FROM Message WHERE id = $1', [msg.payload]);
-//     const newMessage = rows[0];
-//     // Broadcast newMessage to clients...
-//   });
-
-//   // Begin listening for notifications
-//   await client.query('LISTEN new_message');
-
-// } catch (err) {
-//   throw err;
-
-// } finally {
-//   client.release();
-// }
-
-// // ...
-// await pool.end();
-
-// TODO: temperorarily impl. in firebase
-
-// Import the functions you need from the SDKs you need
+'use server'
 import { initializeApp } from "firebase/app";
 import { getDatabase, onValue, ref, set } from "firebase/database";
 import { User, getAuth } from 'firebase/auth'
 import { Msg, Room } from "./data";
+
+// import Client from "pg-listen";
+// // Configure WebSocket support
+// import { Pool } from 'pg';
+
+// const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// pool.on('error', err => console.error(err));  // deal with e.g. re-connect
+
+// // Remove the duplicate import statement for 'Client'
+// // import Client from 'pg-listen';
+
+// const client = new Client({ connectionString: process.env.DATABASE_URL });
+
+// async function listenForNotifications() {
+//     await client.connect();
+
+//     // Listen for notifications
+//     client.notifications.on('new_message', async (payload) => {
+//         const { rows } = await client.query('SELECT * FROM Message WHERE id = $1', [payload]);
+//         const newMessage = rows[0];
+//         // Broadcast newMessage to clients...
+//     });
+
+//     // Begin listening for notifications
+//     await client.query('LISTEN new_message');
+// }
+
+// listenForNotifications()
+//     .catch(err => {
+//         throw err;
+//     })
+//     .finally(() => {
+//         client.end();
+//         pool.end();
+//     });
+
+// TODO: temperorarily impl. in firebase
+
+// Import the functions you need from the SDKs you need
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -57,12 +61,12 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getDatabase(app);
 
-export function SendMessageToFirebase(Room_ID: string, msg: Msg) {
+export async function SendMessageToFirebase(Room_ID: string, msg: Msg) {
     const room_ref = ref(db, `chat/${Room_ID}/msgs/${msg.id}`);
     set(room_ref, msg);
 }
 
-export function GetMessagesFromFirebase(Room_ID: string, SetMessages: ((msgs: Msg[]) => void)) {
+export async function GetMessagesFromFirebase(Room_ID: string, SetMessages: ((msgs: Msg[]) => void)) {
     const room_ref = ref(db, `chat/${Room_ID}/msgs`)
     onValue(room_ref, (snapshot) => {
         const data = snapshot.val();
@@ -76,7 +80,7 @@ export function GetMessagesFromFirebase(Room_ID: string, SetMessages: ((msgs: Ms
     });
 }
 
-export function GetRoomsFromFirebase(SetRooms: ((msgs: Room[]) => void)){
+export async function GetRoomsFromFirebase(SetRooms: ((msgs: Room[]) => void)){
     const rooms_ref = ref(db, `chatrooms`);
     onValue(rooms_ref, (snapshot) => {
         const data = snapshot.val();
@@ -90,7 +94,7 @@ export function GetRoomsFromFirebase(SetRooms: ((msgs: Room[]) => void)){
     });
 }
 
-export function AddRoom(room : Room){
+export async function AddRoom(room : Room){
     const rooms_ref = ref(db, `chatrooms/${room.id}`);
     set(rooms_ref,room);
 }

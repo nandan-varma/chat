@@ -1,9 +1,9 @@
 'use client'
 
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { auth } from '@/lib/db';
+// import { auth } from '@/lib/db';
 import { firebaseUser } from '@/lib/db';
-import { onAuthStateChanged } from 'firebase/auth';
+// import { onAuthStateChanged } from 'firebase/auth';
 
 interface AuthContextType {
     user: firebaseUser | null;
@@ -19,16 +19,16 @@ interface AuthProviderProps {
 const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [user, setUser] = useState<firebaseUser | null>(null);
 
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, u => {
-            if (u) {
-                setUser(u);
-            } else {
-                setUser(null);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
+    // useEffect(() => {
+    //     const unsubscribe = onAuthStateChanged(auth, u => {
+    //         if (u) {
+    //             setUser(u);
+    //         } else {
+    //             setUser(null);
+    //         }
+    //     });
+    //     return () => unsubscribe();
+    // }, []);
 
     return (
         <AuthContext.Provider value={{ user, setUser }}>
