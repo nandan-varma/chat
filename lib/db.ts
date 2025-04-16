@@ -1,98 +1,157 @@
-// import { Pool, neonConfig } from '@neondatabase/serverless';
-// import ws from 'ws';
-
-// // Configure WebSocket support
-// neonConfig.webSocketConstructor = ws;
-
-// const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-// pool.on('error', err => console.error(err));  // deal with e.g. re-connect
-
-// const client = await pool.connect();
-
-// try {
-//   // Listen for notifications
-//   client.on('notification', async (msg) => {
-//     const { rows } = await client.query('SELECT * FROM Message WHERE id = $1', [msg.payload]);
-//     const newMessage = rows[0];
-//     // Broadcast newMessage to clients...
-//   });
-
-//   // Begin listening for notifications
-//   await client.query('LISTEN new_message');
-
-// } catch (err) {
-//   throw err;
-
-// } finally {
-//   client.release();
-// }
-
-// // ...
-// await pool.end();
-
-// TODO: temperorarily impl. in firebase
-
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getDatabase, onValue, ref, set } from "firebase/database";
-import { User, getAuth } from 'firebase/auth'
+import { getAuth, User } from "firebase/auth";
+import { getDatabase, ref, push, onValue, set, off, remove, DatabaseReference, Unsubscribe } from "firebase/database";
 import { Msg, Room } from "./data";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { v4 as uuidv4 } from "uuid";
 
-// Your web app's Firebase configuration
+// Firebase configuration - in a real app, use environment variables
 const firebaseConfig = {
-    apiKey: "AIzaSyDReA-v0I3J_-CbOOpPsmn_x4us4a1_UF8",
-    authDomain: "chess-nandanvarma.firebaseapp.com",
-    databaseURL: "https://chess-nandanvarma-default-rtdb.firebaseio.com",
-    projectId: "chess-nandanvarma",
-    storageBucket: "chess-nandanvarma.appspot.com",
-    messagingSenderId: "1022610696614",
-    appId: "1:1022610696614:web:8e0176f9e2bd4744174767"
-};
+    apiKey: "AIzaSyBp2I61CnWdZud7YjF-jDVYAWisbHtcgLc",
+    authDomain: "chats-nv.firebaseapp.com",
+    databaseURL: "https://chats-nv-default-rtdb.firebaseio.com",
+    projectId: "chats-nv",
+    storageBucket: "chats-nv.firebasestorage.app",
+    messagingSenderId: "991108923374",
+    appId: "1:991108923374:web:2f56652a15477c826598ff",
+    measurementId: "G-TJ91QHE4Q6"
+  };
 
 // Initialize Firebase
-export const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getDatabase(app);
 
-export function SendMessageToFirebase(Room_ID: string, msg: Msg) {
-    const room_ref = ref(db, `chat/${Room_ID}/msgs/${msg.id}`);
-    set(room_ref, msg);
+/**
+ * Sends a message to a specific chat room
+ * @param roomId - The ID of the room to send the message to
+ * @param msg - The message object to send
+ * @returns Promise that resolves when the message is sent
+ */
+export function SendMessageToFirebase(roomId: string, msg: Msg): Promise<void> {
+  try {
+    // Generate a unique ID if one isn't provided
+    const messageId = msg.id || uuidv4();
+    const messageWithId = { ...msg, id: messageId };
+    
+    const messagesRef = ref(db, `messages/${roomId}/${messageId}`);
+    return set(messagesRef, messageWithId);
+  } catch (error) {
+    console.error("Error sending message:", error);
+    return Promise.reject(error);
+  }
 }
 
-export function GetMessagesFromFirebase(Room_ID: string, SetMessages: ((msgs: Msg[]) => void)) {
-    const room_ref = ref(db, `chat/${Room_ID}/msgs`)
-    onValue(room_ref, (snapshot) => {
-        const data = snapshot.val();
-        if (data === null || data === undefined) {
-            SetMessages([])
-            return
-        }
-        let msgs = Object.values(JSON.parse(JSON.stringify(data)))
-        SetMessages(msgs as Msg[]);
-        // console.log(msgs);
+/**
+ * Subscribe to messages from a specific room
+ * @param roomId - The ID of the room to get messages from
+ * @param callback - Function to call with the messages
+ * @returns Unsubscribe function to stop listening for updates
+ */
+export function GetMessagesFromFirebase(roomId: string, callback: (msgs: Msg[]) => void): Unsubscribe {
+  const messagesRef = ref(db, `messages/${roomId}`);
+  
+  const unsubscribe = onValue(messagesRef, (snapshot) => {
+    const data = snapshot.val();
+    const messages: Msg[] = [];
+    
+    if (data) {
+      Object.keys(data).forEach((key) => {
+        messages.push({
+          id: key,
+          ...data[key]
+        });
+      });
+      
+      // Sort messages by timestamp
+      messages.sort((a, b) => a.timestamp - b.timestamp);
+    }
+    
+    callback(messages);
+  }, (error) => {
+    console.error("Error fetching messages:", error);
+    callback([]);
+  });
+  
+  return unsubscribe;
+}
+
+/**
+ * Subscribe to the list of chat rooms
+ * @param callback - Function to call with the rooms
+ * @returns Unsubscribe function to stop listening for updates
+ */
+export function GetRoomsFromFirebase(callback: (rooms: Room[]) => void): Unsubscribe {
+  const roomsRef = ref(db, 'chatrooms');
+  
+  const unsubscribe = onValue(roomsRef, (snapshot) => {
+    const data = snapshot.val();
+    const rooms: Room[] = [];
+    
+    if (data) {
+      Object.keys(data).forEach((key) => {
+        rooms.push({
+          id: key,
+          ...data[key]
+        });
+      });
+      
+      // Sort rooms by creation date if available
+      rooms.sort((a, b) => {
+        return (b.created_at || 0) - (a.created_at || 0);
+      });
+    }
+    
+    callback(rooms);
+  }, (error) => {
+    console.error("Error fetching rooms:", error);
+    callback([]);
+  });
+  
+  return unsubscribe;
+}
+
+/**
+ * Add a new chat room
+ * @param room - The room object to add
+ * @returns Promise that resolves when the room is added
+ */
+export function AddRoom(room: Room): Promise<void> {
+  try {
+    // Ensure room has required fields
+    if (!room.name || !room.id) {
+      return Promise.reject(new Error("Room must have name and id"));
+    }
+    
+    const roomRef = ref(db, `chatrooms/${room.id}`);
+    return set(roomRef, {
+      ...room,
+      created_at: room.created_at || Date.now()
     });
+  } catch (error) {
+    console.error("Error adding room:", error);
+    return Promise.reject(error);
+  }
 }
 
-export function GetRoomsFromFirebase(SetRooms: ((msgs: Room[]) => void)){
-    const rooms_ref = ref(db, `chatrooms`);
-    onValue(rooms_ref, (snapshot) => {
-        const data = snapshot.val();
-        if (data === null || data === undefined) {
-            SetRooms([])
-            return
-        }
-        let rooms = Object.values(JSON.parse(JSON.stringify(data)))
-        SetRooms(rooms as Room[]);
-        // console.log(msgs);
-    });
-}
-
-export function AddRoom(room : Room){
-    const rooms_ref = ref(db, `chatrooms/${room.id}`);
-    set(rooms_ref,room);
+/**
+ * Delete a chat room
+ * @param roomId - The ID of the room to delete
+ * @returns Promise that resolves when the room is deleted
+ */
+export function DeleteRoom(roomId: string): Promise<void> {
+  try {
+    const roomRef = ref(db, `chatrooms/${roomId}`);
+    const messagesRef = ref(db, `messages/${roomId}`);
+    
+    // Delete room and its messages
+    return Promise.all([
+      remove(roomRef),
+      remove(messagesRef)
+    ]).then(() => Promise.resolve());
+  } catch (error) {
+    console.error("Error deleting room:", error);
+    return Promise.reject(error);
+  }
 }
 
 export type firebaseUser = User;

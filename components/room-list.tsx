@@ -60,8 +60,12 @@ import { v4 } from "uuid";
 
 export function RoomList() {
   const [rooms, SetRooms] = useState<Room[]>([]);
+  const [open, setOpen] = useState(false);
+
   useEffect(() => {
-    GetRoomsFromFirebase(SetRooms);
+    GetRoomsFromFirebase((RoomsInFirebase) => {
+      SetRooms(RoomsInFirebase);
+    });
   }, [])
   // const data = getData();
   return (
@@ -77,11 +81,11 @@ export function RoomList() {
               <div className="text-sm text-primary">{room.description}</div>
             </Link>
           )}
-          <Dialog>
+          <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">Add Room</Button>
             </DialogTrigger>
-            <NewRoomDialog />
+            <NewRoomDialog setOpen={setOpen} />
           </Dialog>
         </nav>
       </div>
@@ -96,7 +100,7 @@ const FormSchema = z.object({
   description: z.string(),
 })
 
-export function NewRoomDialog() {
+export function NewRoomDialog({ setOpen }: { setOpen: (open: boolean) => void }) {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -108,20 +112,24 @@ export function NewRoomDialog() {
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
     // Add your form submission logic here
-    if (form.getValues().name === "" || form.getValues().description === "") {
+    if (data.name === "" || data.description === "") {
       alert("You need to fill all the details");
       return;
     }
+
     let email = user?.email
     if (email === undefined || email === null) {
       alert("you need to login in order complete this action")
-    } else {
-      AddRoom({ ...form.getValues(), id: v4(), owner_id: email, created_at: Date.now() })
+      return;
     }
+
+    AddRoom({ ...data, id: v4(), owner_id: email, created_at: Date.now() })
+    form.reset();
+    setOpen(false);
   }
 
   return (
-    <DialogContent className="sm:max-w-[425px]">
+    <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()}>
       <DialogHeader>
         <DialogTitle>Add New Room</DialogTitle>
         <DialogDescription>
@@ -133,17 +141,15 @@ export function NewRoomDialog() {
           <Label htmlFor="name" className="text-right">
             Name
           </Label>
-          <Input id="name" className="col-span-3" {...form.register("name")} />
+          <Input id="name" className="col-span-3" {...form.register("name", { required: true })} />
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
-          <Label className="text-right">
+          <Label htmlFor="description" className="text-right">
             Description
           </Label>
-          <Input id="description" className="col-span-3" {...form.register("description")} />
+          <Input id="description" className="col-span-3" {...form.register("description", { required: true })} />
         </div>
-        <DialogClose asChild>
-          <Button type="submit">Save changes</Button>
-        </DialogClose>
+        <Button type="submit" className="ml-auto">Save changes</Button>
       </form>
     </DialogContent>
   )
