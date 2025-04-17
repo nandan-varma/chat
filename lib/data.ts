@@ -2,13 +2,14 @@ export type Msg = {
     id: string,
     sender: string,
     content: string,
-    timestamp: number
+    timestamp: number,
+    encrypted?: boolean
 }
 
 export type Room = {
     id: string;
     name: string;
-    description: string
+    description: string;
     owner_id: string;
     created_at: number;
 }
