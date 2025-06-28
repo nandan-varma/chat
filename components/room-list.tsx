@@ -19,11 +19,12 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { AddRoom, GetRoomsFromFirebase } from "@/lib/db";
+import { createPasswordHash } from "@/lib/encryption";
 import { useAuth } from "./auth-provider";
 import { v4 } from "uuid";
 import { Checkbox } from "@/components/ui/checkbox";
 
-export function RoomList() {
+export function RoomList({ onRoomSelect }: { onRoomSelect?: () => void }) {
   const [rooms, SetRooms] = useState<Room[]>([]);
   const [open, setOpen] = useState(false);
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
@@ -38,30 +39,41 @@ export function RoomList() {
 
   const handleRoomClick = (room: Room, e: React.MouseEvent) => {
     e.preventDefault();
-    setSelectedRoom(room);
-    setPasswordPromptOpen(true);
+
+    if (room.isPasswordProtected) {
+      // Show password prompt for protected rooms
+      setSelectedRoom(room);
+      setPasswordPromptOpen(true);
+    } else {
+      // Navigate directly to non-protected rooms
+      router.push(`/room/${room.id}`);
+      onRoomSelect?.(); // Close sidebar on mobile
+    }
   };
 
   return (
-    <div className="border-r bg-background">
-      <div className="flex flex-col gap-4 py-2 fixed">
-        <h2 className="p-5 text-3xl font-bold text-center">Rooms</h2>
-        <nav className="grid gap-2 px-4">
+    <div className="h-full bg-background flex flex-col">
+      <div className="flex-1 overflow-y-auto">
+        <h2 className="p-4 text-2xl md:text-3xl font-bold text-center border-b">Rooms</h2>
+        <nav className="grid gap-2 p-4">
           {rooms.map((room) =>
             <Link
               key={room.id}
               href={'/room/' + room.id}
-              className="p-4 bg-secondary shadow-md rounded-lg hover:bg-transparent"
+              className="p-3 bg-secondary shadow-md rounded-lg hover:bg-transparent transition-colors"
               onClick={(e) => handleRoomClick(room, e)}
             >
-              <div className="font-medium">{room.name}</div>
-              <div className="text-sm text-primary">{room.description}</div>
+              <div className="font-medium flex items-center gap-2 text-sm md:text-base">
+                {room.name}
+                {room.isPasswordProtected && <span className="text-amber-600">🔒</span>}
+              </div>
+              <div className="text-xs md:text-sm text-primary line-clamp-2">{room.description}</div>
             </Link>
           )}
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">Add Room</Button>
+              <Button variant="outline" className="mt-2">Add Room</Button>
             </DialogTrigger>
             <NewRoomDialog setOpen={setOpen} />
           </Dialog>
@@ -70,6 +82,7 @@ export function RoomList() {
             open={passwordPromptOpen}
             setOpen={setPasswordPromptOpen}
             room={selectedRoom}
+            onRoomSelect={onRoomSelect}
           />
         </nav>
       </div>
@@ -94,7 +107,7 @@ export function NewRoomDialog({ setOpen }: { setOpen: (open: boolean) => void })
   })
   const { user } = useAuth();
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
     // Add your form submission logic here
     if (data.name === "") {
       alert("You need to provide a room name");
@@ -112,23 +125,31 @@ export function NewRoomDialog({ setOpen }: { setOpen: (open: boolean) => void })
       return;
     }
 
-    const roomData: Room = {
-      id: v4(),
-      name: data.name,
-      description: data.description,
-      owner_id: email,
-      created_at: Date.now(),
-    };
+    try {
+      // Create password hash for the room
+      const passwordHash = await createPasswordHash(data.password);
 
-    // If the room has a password, store it in local storage
-    if (data.password) {
+      const roomData: Room = {
+        id: v4(),
+        name: data.name,
+        description: data.description,
+        owner_id: email,
+        created_at: Date.now(),
+        isPasswordProtected: true,
+        passwordHash: passwordHash,
+      };
+
+      // Store password in local storage for the creator
       const roomKey = `room_${roomData.id}`;
       localStorage.setItem(roomKey, data.password);
-    }
 
-    AddRoom(roomData);
-    form.reset();
-    setOpen(false);
+      await AddRoom(roomData);
+      form.reset();
+      setOpen(false);
+    } catch (error) {
+      console.error("Error creating room:", error);
+      alert("Error creating room. Please try again.");
+    }
   }
 
   return (
@@ -182,11 +203,13 @@ export function NewRoomDialog({ setOpen }: { setOpen: (open: boolean) => void })
 export function PasswordPromptDialog({
   open,
   setOpen,
-  room
+  room,
+  onRoomSelect
 }: {
   open: boolean;
   setOpen: (open: boolean) => void;
   room: Room | null;
+  onRoomSelect?: () => void;
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -206,6 +229,7 @@ export function PasswordPromptDialog({
     setOpen(false);
     setPassword("");
     setError("");
+    onRoomSelect?.(); // Close sidebar on mobile
   };
 
   return (

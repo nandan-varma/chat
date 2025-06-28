@@ -10,7 +10,7 @@ export async function generateKeyFromPassword(password: string, salt: string = '
   // Convert password and salt to array buffers
   const passwordBuffer = new TextEncoder().encode(password);
   const saltBuffer = new TextEncoder().encode(salt);
-  
+
   // Import the password as a key
   const importedKey = await crypto.subtle.importKey(
     'raw',
@@ -19,7 +19,7 @@ export async function generateKeyFromPassword(password: string, salt: string = '
     false,
     ['deriveBits', 'deriveKey']
   );
-  
+
   // Derive a key for AES-GCM
   return crypto.subtle.deriveKey(
     {
@@ -42,13 +42,13 @@ export async function encryptMessage(plaintext: string, password: string): Promi
   try {
     // Generate a random initialization vector
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    
+
     // Generate the encryption key from password
     const key = await generateKeyFromPassword(password);
-    
+
     // Convert plaintext to buffer
     const plaintextBuffer = new TextEncoder().encode(plaintext);
-    
+
     // Encrypt the data
     const encryptedBuffer = await crypto.subtle.encrypt(
       {
@@ -58,12 +58,12 @@ export async function encryptMessage(plaintext: string, password: string): Promi
       key,
       plaintextBuffer
     );
-    
+
     // Combine IV and encrypted data for storage
     const result = new Uint8Array(iv.length + encryptedBuffer.byteLength);
     result.set(iv);
     result.set(new Uint8Array(encryptedBuffer), iv.length);
-    
+
     // Return as base64 string for easy storage
     return btoa(String.fromCharCode(...result));
   } catch (error) {
@@ -79,14 +79,14 @@ export async function decryptMessage(encryptedText: string, password: string): P
   try {
     // Convert base64 string back to buffer
     const data = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
-    
+
     // Extract IV (first 12 bytes) and ciphertext
     const iv = data.slice(0, 12);
     const ciphertext = data.slice(12);
-    
+
     // Generate the decryption key from password
     const key = await generateKeyFromPassword(password);
-    
+
     // Decrypt the data
     const decryptedBuffer = await crypto.subtle.decrypt(
       {
@@ -96,7 +96,7 @@ export async function decryptMessage(encryptedText: string, password: string): P
       key,
       ciphertext
     );
-    
+
     // Convert buffer back to string
     return new TextDecoder().decode(decryptedBuffer);
   } catch (error) {
@@ -119,4 +119,35 @@ export function hasRoomPassword(roomId: string): boolean {
 export function getRoomPassword(roomId: string): string | null {
   const key = `room_${roomId}`;
   return localStorage.getItem(key);
+}
+
+/**
+ * Create a hash from a password for room verification
+ * This is different from the encryption key - it's just for verifying the password
+ */
+export async function createPasswordHash(password: string): Promise<string> {
+  try {
+    // Use a simple hash for verification (not for encryption)
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password + 'room-password-salt');
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (error) {
+    console.error('Error creating password hash:', error);
+    throw error;
+  }
+}
+
+/**
+ * Verify a password against a stored hash
+ */
+export async function verifyPasswordHash(password: string, hash: string): Promise<boolean> {
+  try {
+    const computedHash = await createPasswordHash(password);
+    return computedHash === hash;
+  } catch (error) {
+    console.error('Error verifying password hash:', error);
+    return false;
+  }
 }

@@ -1,17 +1,17 @@
 'use client'
 
 import { SendMessage } from "@/components/send-message"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { MessageList } from "@/components/message-view"
 import { RoomList } from "@/components/room-list"
 import { Msg, Room } from "@/lib/data"
-import { GetMessagesFromFirebase, GetRoomsFromFirebase } from "@/lib/db"
+import { GetMessagesFromFirebase, GetRoomsFromFirebase, GetRoomDetails } from "@/lib/db"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Loader2, MoveLeft, ShieldAlert } from "lucide-react"
 import { use } from 'react'
-import { hasRoomPassword, getRoomPassword } from "@/lib/encryption"
+import { hasRoomPassword, getRoomPassword, decryptMessage, verifyPasswordHash } from "@/lib/encryption"
 import {
   Dialog,
   DialogContent,
@@ -46,7 +46,7 @@ export default function RoomPage({
   }, [user, authLoading, router]);
   
   // Function to load messages once we have appropriate access
-  const loadMessages = () => {
+  const loadMessages = useCallback(() => {
     if (user && roomId) {
       setIsPasswordValid(true); // Consider password valid when loading messages
       const unsubscribe = GetMessagesFromFirebase(roomId, (msgs) => {
@@ -56,27 +56,59 @@ export default function RoomPage({
 
       return unsubscribe;
     }
-  };
+  }, [user, roomId]);
+
   // Check for room details and if it's password protected
   useEffect(() => {
     if (user && roomId) {
       // Get room details to check if password protected
-      const unsubscribe = GetRoomsFromFirebase((rooms) => {
-        const room = rooms.find(r => r.id === roomId);
-        setCurrentRoom(room || null);
+      GetRoomDetails(roomId).then((room) => {
+        setCurrentRoom(room);
         
-        // If room requires password and we don't have it, show prompt
-        if (!hasRoomPassword(roomId)) {
-          setPasswordPromptOpen(true);
+        if (!room) {
+          // Room doesn't exist, redirect to room list
+          router.push('/room');
+          return;
+        }
+        
+        // Check if room is password protected
+        if (room.isPasswordProtected) {
+          // Check if we have a stored password for this room
+          if (!hasRoomPassword(roomId)) {
+            setPasswordPromptOpen(true);
+            setIsPasswordValid(false);
+          } else {
+            // We have a stored password, verify it against the room's hash
+            const storedPassword = getRoomPassword(roomId);
+            if (storedPassword && room.passwordHash) {
+              verifyPasswordHash(storedPassword, room.passwordHash).then((isValid) => {
+                if (isValid) {
+                  setIsPasswordValid(true);
+                  loadMessages();
+                } else {
+                  // Stored password is invalid, clear it and show prompt
+                  localStorage.removeItem(`room_${roomId}`);
+                  setPasswordPromptOpen(true);
+                  setIsPasswordValid(false);
+                }
+              });
+            } else {
+              // No password hash in room or no stored password, show prompt
+              setPasswordPromptOpen(true);
+              setIsPasswordValid(false);
+            }
+          }
         } else {
-          // If we have the password or room doesn't need one, load messages
+          // Room is not password protected, load messages directly
+          setIsPasswordValid(true);
           loadMessages();
         }
+      }).catch((error) => {
+        console.error("Error getting room details:", error);
+        router.push('/room');
       });
-      
-      return unsubscribe;
     }
-  }, [roomId, user, loadMessages]);
+  }, [roomId, user, loadMessages, router]);
 
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -87,53 +119,36 @@ export default function RoomPage({
       return;
     }
     
-    // Try to decrypt a test message or verify password some other way
+    if (!currentRoom || !currentRoom.passwordHash) {
+      setPasswordError("Room password configuration error");
+      return;
+    }
+    
     try {
-      // Store the password temporarily
-      const roomKey = `room_${roomId}`;
-      localStorage.setItem(roomKey, password);
+      // Verify the password against the stored hash
+      const isValid = await verifyPasswordHash(password, currentRoom.passwordHash);
       
-      // Check if we can load and decrypt messages with this password
-      const testLoadResult = await new Promise<boolean>((resolve) => {
-        const unsub = GetMessagesFromFirebase(roomId, (msgs) => {
-          unsub(); // Unsubscribe immediately as we only want to test
-          
-          // If there are no messages, we can't validate the password
-          if (msgs.length === 0) {
-            resolve(true); // Allow access if no messages to test against
-            return;
-          }
-          
-          // Find an encrypted message to test
-          const encryptedMsg = msgs.find(m => m.encrypted);
-          if (!encryptedMsg) {
-            resolve(true); // No encrypted messages, password is likely correct
-            return;
-          }
-          
-          // We have a message to test against - this will be validated in the MessageList component
-          // For now, assume password is valid and let the message decryption handle errors
-          resolve(true);
-        });
-      });
-      
-      if (testLoadResult) {
-        // Password seems valid, close dialog and load messages
+      if (isValid) {
+        // Password is correct, store it and close dialog
+        const roomKey = `room_${roomId}`;
+        localStorage.setItem(roomKey, password);
         setPasswordPromptOpen(false);
+        setPasswordError("");
         setIsPasswordValid(true);
         loadMessages();
       } else {
-        // Password appears to be invalid
+        // Password is incorrect - DO NOT close dialog, make user retry
         setPasswordError("Incorrect password. Please try again.");
         setIsPasswordValid(false);
-        localStorage.removeItem(roomKey); // Remove the invalid password
+        setPassword(""); // Clear the password field for retry
+        // Keep the dialog open by NOT setting setPasswordPromptOpen(false)
       }
     } catch (error) {
       console.error("Error verifying password:", error);
       setPasswordError("Could not verify password. Please try again.");
       setIsPasswordValid(false);
-      const roomKey = `room_${roomId}`;
-      localStorage.removeItem(roomKey); // Remove the potentially invalid password
+      setPassword(""); // Clear the password field for retry
+      // Keep the dialog open by NOT setting setPasswordPromptOpen(false)
     }
   };
 
@@ -170,12 +185,25 @@ export default function RoomPage({
   return (
     <div className="flex flex-col h-full">
       {/* Password prompt dialog */}
-      <Dialog open={passwordPromptOpen} onOpenChange={setPasswordPromptOpen}>
-        <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()}>
+      <Dialog open={passwordPromptOpen} onOpenChange={(open) => {
+        // Only allow closing the dialog if user clicks Cancel button
+        // Don't allow closing by clicking outside or escape key
+        if (!open && passwordPromptOpen) {
+          // If someone tries to close the dialog, redirect them back to room list
+          router.push('/room');
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => {
+          // Prevent closing dialog by clicking outside
+          e.preventDefault();
+        }} onEscapeKeyDown={(e) => {
+          // Prevent closing dialog with escape key
+          e.preventDefault();
+        }}>
           <DialogHeader>
             <DialogTitle>Enter Room Password</DialogTitle>
             <DialogDescription>
-              This chat room is password-protected. Enter the password to view messages.
+              This chat room is password-protected. You must enter the correct password to access the room and view messages.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handlePasswordSubmit} className="grid gap-4 py-4">
@@ -200,7 +228,12 @@ export default function RoomPage({
               </div>
             )}
             <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => router.push('/room')}>
+              <Button type="button" variant="outline" onClick={() => {
+                // Clear any stored password and redirect to room list
+                const roomKey = `room_${roomId}`;
+                localStorage.removeItem(roomKey);
+                router.push('/room');
+              }}>
                 Cancel
               </Button>
               <Button type="submit">
@@ -212,8 +245,8 @@ export default function RoomPage({
       </Dialog>
 
       {/* Header with room info */}
-      <div className="p-4 fixed backdrop-blur-md z-10 w-[calc(100%-200px)] border-b flex items-center justify-between">
-        <div className="space-y-1">
+      <div className="p-4 fixed backdrop-blur-md z-10 w-full border-b flex items-center justify-between bg-background/80">
+        <div className="space-y-1 ml-12 md:ml-0">
           <h2 className="font-semibold text-lg">
             {currentRoom?.name || `Room: ${roomId}`}
             <span className="ml-2 text-amber-600">🔒</span>
@@ -225,26 +258,36 @@ export default function RoomPage({
           onClick={logout}
           className="ml-4"
         >
-          <span className="hidden md:inline">Log Out</span>
+          <span className="hidden sm:inline">Log Out</span>
+          <span className="sm:hidden">Out</span>
         </Button>
       </div>
 
       {/* Message area */}
-      <div className="flex-1 overflow-auto pt-14 pb-16">
+      <div className="flex-1 overflow-auto pt-16 md:pt-14 pb-16">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-6 w-6 animate-spin mr-2" />
             <p>Loading messages...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <p>No messages yet. Start the conversation!</p>
+          <div className="flex items-center justify-center h-full text-gray-500 px-4">
+            <p className="text-center">No messages yet. Start the conversation!</p>
           </div>
         ) : (
           <MessageList 
             username={user.email || "Anonymous"} 
             msgs={messages} 
-            onPasswordInvalid={() => setIsPasswordValid(false)}
+            onPasswordInvalid={() => {
+              // If password becomes invalid after entering room, show password prompt again
+              setIsPasswordValid(false);
+              setPasswordPromptOpen(true);
+              setPasswordError("Password appears to be incorrect. Please re-enter the room password.");
+              setPassword("");
+              // Clear the stored password since it's invalid
+              const roomKey = `room_${roomId}`;
+              localStorage.removeItem(roomKey);
+            }}
           />
         )}
       </div>

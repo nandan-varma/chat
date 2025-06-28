@@ -12,6 +12,8 @@ export type Room = {
     description: string;
     owner_id: string;
     created_at: number;
+    isPasswordProtected?: boolean;
+    passwordHash?: string; // Store a hash for password verification
 }
 
 export type User = {
@@ -19,9 +21,3 @@ export type User = {
     name: string,
     last_online: string
 }
-
-// export let sample_users: User[] = [
-//     { id: 1, name: "NV", last_online: "1234567" },
-//     { id: 2, name: "JP", last_online: "01234567" },
-// ]
-

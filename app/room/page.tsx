@@ -47,11 +47,19 @@ export default function RoomListingPage() {
   }
 
   return (
-    <div className="hidden md:flex items-center justify-center bg-muted/20 rounded-lg p-12">
+    <div className="flex items-center justify-center bg-muted/20 rounded-lg p-6 md:p-12 h-full">
       <div className="text-center">
-        <h3 className="text-lg font-medium mb-2">Select a room</h3>
+        <h3 className="text-lg font-medium mb-2">
+          <span className="hidden md:inline">Select a room</span>
+          <span className="md:hidden">Welcome to Chat</span>
+        </h3>
         <p className="text-muted-foreground">
-          Choose a room from the list or create a new one to start chatting
+          <span className="hidden md:inline">
+            Choose a room from the list or create a new one to start chatting
+          </span>
+          <span className="md:hidden">
+            Tap the menu button to see available rooms or create a new one
+          </span>
         </p>
       </div>
     </div>

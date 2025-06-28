@@ -1,20 +1,20 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, User } from "firebase/auth";
-import { getDatabase, ref, push, onValue, set, off, remove, DatabaseReference, Unsubscribe } from "firebase/database";
+import { getDatabase, ref, push, onValue, set, off, remove, DatabaseReference, Unsubscribe, update } from "firebase/database";
 import { Msg, Room } from "./data";
 import { v4 as uuidv4 } from "uuid";
 
 // Firebase configuration - in a real app, use environment variables
 const firebaseConfig = {
-    apiKey: "AIzaSyBp2I61CnWdZud7YjF-jDVYAWisbHtcgLc",
-    authDomain: "chats-nv.firebaseapp.com",
-    databaseURL: "https://chats-nv-default-rtdb.firebaseio.com",
-    projectId: "chats-nv",
-    storageBucket: "chats-nv.firebasestorage.app",
-    messagingSenderId: "991108923374",
-    appId: "1:991108923374:web:2f56652a15477c826598ff",
-    measurementId: "G-TJ91QHE4Q6"
-  };
+  apiKey: "AIzaSyBp2I61CnWdZud7YjF-jDVYAWisbHtcgLc",
+  authDomain: "chats-nv.firebaseapp.com",
+  databaseURL: "https://chats-nv-default-rtdb.firebaseio.com",
+  projectId: "chats-nv",
+  storageBucket: "chats-nv.firebasestorage.app",
+  messagingSenderId: "991108923374",
+  appId: "1:991108923374:web:2f56652a15477c826598ff",
+  measurementId: "G-TJ91QHE4Q6"
+};
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -32,7 +32,7 @@ export function SendMessageToFirebase(roomId: string, msg: Msg): Promise<void> {
     // Generate a unique ID if one isn't provided
     const messageId = msg.id || uuidv4();
     const messageWithId = { ...msg, id: messageId };
-    
+
     const messagesRef = ref(db, `messages/${roomId}/${messageId}`);
     return set(messagesRef, messageWithId);
   } catch (error) {
@@ -49,11 +49,11 @@ export function SendMessageToFirebase(roomId: string, msg: Msg): Promise<void> {
  */
 export function GetMessagesFromFirebase(roomId: string, callback: (msgs: Msg[]) => void): Unsubscribe {
   const messagesRef = ref(db, `messages/${roomId}`);
-  
+
   const unsubscribe = onValue(messagesRef, (snapshot) => {
     const data = snapshot.val();
     const messages: Msg[] = [];
-    
+
     if (data) {
       Object.keys(data).forEach((key) => {
         messages.push({
@@ -61,17 +61,17 @@ export function GetMessagesFromFirebase(roomId: string, callback: (msgs: Msg[]) 
           ...data[key]
         });
       });
-      
+
       // Sort messages by timestamp
       messages.sort((a, b) => a.timestamp - b.timestamp);
     }
-    
+
     callback(messages);
   }, (error) => {
     console.error("Error fetching messages:", error);
     callback([]);
   });
-  
+
   return unsubscribe;
 }
 
@@ -82,11 +82,11 @@ export function GetMessagesFromFirebase(roomId: string, callback: (msgs: Msg[]) 
  */
 export function GetRoomsFromFirebase(callback: (rooms: Room[]) => void): Unsubscribe {
   const roomsRef = ref(db, 'chatrooms');
-  
+
   const unsubscribe = onValue(roomsRef, (snapshot) => {
     const data = snapshot.val();
     const rooms: Room[] = [];
-    
+
     if (data) {
       Object.keys(data).forEach((key) => {
         rooms.push({
@@ -94,19 +94,19 @@ export function GetRoomsFromFirebase(callback: (rooms: Room[]) => void): Unsubsc
           ...data[key]
         });
       });
-      
+
       // Sort rooms by creation date if available
       rooms.sort((a, b) => {
         return (b.created_at || 0) - (a.created_at || 0);
       });
     }
-    
+
     callback(rooms);
   }, (error) => {
     console.error("Error fetching rooms:", error);
     callback([]);
   });
-  
+
   return unsubscribe;
 }
 
@@ -121,7 +121,7 @@ export function AddRoom(room: Room): Promise<void> {
     if (!room.name || !room.id) {
       return Promise.reject(new Error("Room must have name and id"));
     }
-    
+
     const roomRef = ref(db, `chatrooms/${room.id}`);
     return set(roomRef, {
       ...room,
@@ -142,7 +142,7 @@ export function DeleteRoom(roomId: string): Promise<void> {
   try {
     const roomRef = ref(db, `chatrooms/${roomId}`);
     const messagesRef = ref(db, `messages/${roomId}`);
-    
+
     // Delete room and its messages
     return Promise.all([
       remove(roomRef),
@@ -152,6 +152,56 @@ export function DeleteRoom(roomId: string): Promise<void> {
     console.error("Error deleting room:", error);
     return Promise.reject(error);
   }
+}
+
+/**
+ * Update a room's password protection status
+ * @param roomId - The ID of the room to update
+ * @param isPasswordProtected - Whether the room should be password protected
+ * @param passwordHash - The hash of the password (if protected)
+ * @returns Promise that resolves when the room is updated
+ */
+export function UpdateRoomPasswordStatus(roomId: string, isPasswordProtected: boolean, passwordHash?: string): Promise<void> {
+  try {
+    const roomRef = ref(db, `chatrooms/${roomId}`);
+    const updates: any = {
+      isPasswordProtected,
+    };
+
+    if (isPasswordProtected && passwordHash) {
+      updates.passwordHash = passwordHash;
+    } else {
+      // Remove password hash if not password protected
+      updates.passwordHash = null;
+    }
+
+    return update(roomRef, updates);
+  } catch (error) {
+    console.error("Error updating room password status:", error);
+    return Promise.reject(error);
+  }
+}
+
+/**
+ * Get room details including password protection status
+ * @param roomId - The ID of the room to get
+ * @returns Promise that resolves with the room data
+ */
+export function GetRoomDetails(roomId: string): Promise<Room | null> {
+  return new Promise((resolve) => {
+    const roomRef = ref(db, `chatrooms/${roomId}`);
+    onValue(roomRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        resolve({
+          id: roomId,
+          ...data
+        });
+      } else {
+        resolve(null);
+      }
+    }, { onlyOnce: true });
+  });
 }
 
 export type firebaseUser = User;

@@ -45,9 +45,9 @@ const Message = ({ msg, isCurrentUser, password, onDecryptionError }: MessagePro
     }, [msg.content, msg.encrypted, password]);
 
     return (
-        <div className={`p-4 my-2 rounded-lg max-w-[80%] ${isCurrentUser ? 'ml-auto bg-blue-500 text-white' : 'bg-secondary'}`}>
-            {!isCurrentUser && <div className="font-semibold mb-1">{msg.sender}</div>}
-            <div className="break-words">
+        <div className={`p-3 md:p-4 my-2 rounded-lg max-w-[85%] md:max-w-[80%] ${isCurrentUser ? 'ml-auto bg-blue-500 text-white' : 'bg-secondary'}`}>
+            {!isCurrentUser && <div className="font-semibold mb-1 text-sm md:text-base">{msg.sender}</div>}
+            <div className="break-words text-sm md:text-base">
                 {isDecrypting ? (
                     <div className="animate-pulse">Decrypting...</div>
                 ) : (
@@ -55,9 +55,9 @@ const Message = ({ msg, isCurrentUser, password, onDecryptionError }: MessagePro
                 )}
                 {msg.encrypted && (
                     <div className={`text-xs mt-1 ${decryptionError ? 'text-red-500' : 'opacity-70'}`}>
-                        {decryptionError 
-                            ? '🔒 Failed to decrypt - incorrect password' 
-                            : `🔒 ${password ? 'Encrypted message' : 'Password required'}`}
+                        {decryptionError
+                            ? '🔒 Failed to decrypt - incorrect password'
+                            : `${password ? '🔒 ' : 'Password required'}`}
                     </div>
                 )}
             </div>
@@ -72,10 +72,10 @@ interface MessageListProps {
 }
 
 function orderByTimestamp(messages: Msg[]) {
-  messages.sort((msg1, msg2) => {
-    return msg1.timestamp - msg2.timestamp;
-  });
-  return messages;
+    messages.sort((msg1, msg2) => {
+        return msg1.timestamp - msg2.timestamp;
+    });
+    return messages;
 }
 
 export function MessageList({ username, msgs, onPasswordInvalid }: MessageListProps) {
@@ -113,7 +113,7 @@ export function MessageList({ username, msgs, onPasswordInvalid }: MessageListPr
             setShowPasswordWarning(false);
         }
     }, [decryptionErrors, msgs, onPasswordInvalid]);
-    
+
     // Function to handle decryption errors reported from Message components
     const handleDecryptionError = () => {
         setDecryptionErrors(prev => prev + 1);
@@ -131,12 +131,12 @@ export function MessageList({ username, msgs, onPasswordInvalid }: MessageListPr
 
     let ordered_msgs = orderByTimestamp(msgs);
     return (
-        <div className="p-4 space-y-2">
+        <div className="p-3 md:p-4 space-y-2">
             {showPasswordWarning && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+                <div className="bg-red-100 border border-red-400 text-red-700 px-3 md:px-4 py-3 rounded relative mb-4 text-sm md:text-base">
                     <strong className="font-bold">Incorrect password!</strong>
                     <span className="block sm:inline"> Unable to decrypt messages with current password.</span>
-                    <button 
+                    <button
                         onClick={handlePasswordRetry}
                         className="underline ml-2 font-semibold hover:text-red-800"
                     >
@@ -144,20 +144,21 @@ export function MessageList({ username, msgs, onPasswordInvalid }: MessageListPr
                     </button>
                 </div>
             )}
-            
-            {ordered_msgs.length === 0 ? (
-                <div className="text-center text-gray-500 my-8">No messages yet</div>
-            ) : (
-                ordered_msgs.map((msg) => (
-                    <Message
-                        key={msg.id}
-                        msg={msg}
-                        isCurrentUser={msg.sender === username}
-                        password={roomPassword}
-                        onDecryptionError={handleDecryptionError}
-                    />
-                ))
-            )}
+            <div className="pt-2">
+                {ordered_msgs.length === 0 ? (
+                    <div className="p-2 text-center text-gray-500 my-8 text-sm md:text-base">No messages yet</div>
+                ) : (
+                    ordered_msgs.map((msg) => (
+                        <Message
+                            key={msg.id}
+                            msg={msg}
+                            isCurrentUser={msg.sender === username}
+                            password={roomPassword}
+                            onDecryptionError={handleDecryptionError}
+                        />
+                    ))
+                )}
+            </div>
             <div ref={messagesEndRef} />
         </div>
     );
