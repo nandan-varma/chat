@@ -27,6 +27,7 @@ interface DecryptedMessageProps {
   msg: Msg
   isCurrentUser: boolean
   password: string | null
+  roomId: string
   showAvatar: boolean
   showSenderName: boolean
   onDecryptionError: () => void
@@ -36,6 +37,7 @@ function DecryptedMessage({
   msg,
   isCurrentUser,
   password,
+  roomId,
   showAvatar,
   showSenderName,
   onDecryptionError,
@@ -50,7 +52,7 @@ function DecryptedMessage({
         setDecrypting(true)
         setFailed(false)
         try {
-          setContent(await decryptMessage(msg.content, password))
+          setContent(await decryptMessage(msg.content, password, roomId))
         } catch {
           setContent('Could not decrypt message')
           setFailed(true)
@@ -175,6 +177,7 @@ export function MessageList({ username, msgs, onPasswordInvalid }: MessageListPr
               msg={msg}
               isCurrentUser={group.isCurrentUser}
               password={roomPassword}
+              roomId={roomId}
               showAvatar={mi === group.messages.length - 1}
               showSenderName={mi === 0}
               onDecryptionError={() => setDecryptionErrors((n) => n + 1)}

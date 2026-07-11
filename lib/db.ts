@@ -4,16 +4,14 @@ import { getDatabase, ref, push, onValue, set, off, remove, DatabaseReference, U
 import { Msg, Room } from "./data";
 import { v4 as uuidv4 } from "uuid";
 
-// Firebase configuration - in a real app, use environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyBp2I61CnWdZud7YjF-jDVYAWisbHtcgLc",
-  authDomain: "chats-nv.firebaseapp.com",
-  databaseURL: "https://chats-nv-default-rtdb.firebaseio.com",
-  projectId: "chats-nv",
-  storageBucket: "chats-nv.firebasestorage.app",
-  messagingSenderId: "991108923374",
-  appId: "1:991108923374:web:2f56652a15477c826598ff",
-  measurementId: "G-TJ91QHE4Q6"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
 // Initialize Firebase

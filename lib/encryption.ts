@@ -1,153 +1,99 @@
 /**
- * Encryption utilities for secure message handling
- * Using AES encryption from browser's Web Crypto API
+ * Encryption utilities for secure message handling.
+ * Uses Web Crypto API (AES-GCM + PBKDF2).
+ *
+ * Breaking change note: the PBKDF2 salt now includes the roomId, so keys are
+ * per-room. Existing messages encrypted with the old fixed salt will not decrypt.
  */
 
-/**
- * Generate a cryptographic key from a password using PBKDF2
- */
-export async function generateKeyFromPassword(password: string, salt: string = 'chat-room-salt'): Promise<CryptoKey> {
-  // Convert password and salt to array buffers
-  const passwordBuffer = new TextEncoder().encode(password);
-  const saltBuffer = new TextEncoder().encode(salt);
+export async function generateKeyFromPassword(password: string, roomId: string): Promise<CryptoKey> {
+  const passwordBuffer = new TextEncoder().encode(password)
+  const saltBuffer = new TextEncoder().encode(`chats-room-${roomId}`)
 
-  // Import the password as a key
   const importedKey = await crypto.subtle.importKey(
     'raw',
     passwordBuffer,
     { name: 'PBKDF2' },
     false,
     ['deriveBits', 'deriveKey']
-  );
+  )
 
-  // Derive a key for AES-GCM
   return crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: saltBuffer,
-      iterations: 100000,
-      hash: 'SHA-256'
-    },
+    { name: 'PBKDF2', salt: saltBuffer, iterations: 100000, hash: 'SHA-256' },
     importedKey,
     { name: 'AES-GCM', length: 256 },
     false,
     ['encrypt', 'decrypt']
-  );
+  )
 }
 
-/**
- * Encrypt a string using AES-GCM
- */
-export async function encryptMessage(plaintext: string, password: string): Promise<string> {
-  try {
-    // Generate a random initialization vector
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+export async function encryptMessage(plaintext: string, password: string, roomId: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const key = await generateKeyFromPassword(password, roomId)
+  const plaintextBuffer = new TextEncoder().encode(plaintext)
 
-    // Generate the encryption key from password
-    const key = await generateKeyFromPassword(password);
+  const encryptedBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    plaintextBuffer
+  )
 
-    // Convert plaintext to buffer
-    const plaintextBuffer = new TextEncoder().encode(plaintext);
+  const result = new Uint8Array(iv.length + encryptedBuffer.byteLength)
+  result.set(iv)
+  result.set(new Uint8Array(encryptedBuffer), iv.length)
 
-    // Encrypt the data
-    const encryptedBuffer = await crypto.subtle.encrypt(
-      {
-        name: 'AES-GCM',
-        iv
-      },
-      key,
-      plaintextBuffer
-    );
-
-    // Combine IV and encrypted data for storage
-    const result = new Uint8Array(iv.length + encryptedBuffer.byteLength);
-    result.set(iv);
-    result.set(new Uint8Array(encryptedBuffer), iv.length);
-
-    // Return as base64 string for easy storage
-    return btoa(String.fromCharCode(...result));
-  } catch (error) {
-    console.error('Encryption error:', error);
-    return plaintext; // Fallback to plaintext on error
-  }
+  return btoa(String.fromCharCode(...result))
 }
 
-/**
- * Decrypt a string using AES-GCM
- */
-export async function decryptMessage(encryptedText: string, password: string): Promise<string> {
-  try {
-    // Convert base64 string back to buffer
-    const data = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
+export async function decryptMessage(encryptedText: string, password: string, roomId: string): Promise<string> {
+  const data = Uint8Array.from(atob(encryptedText), (c) => c.charCodeAt(0))
+  const iv = data.slice(0, 12)
+  const ciphertext = data.slice(12)
+  const key = await generateKeyFromPassword(password, roomId)
 
-    // Extract IV (first 12 bytes) and ciphertext
-    const iv = data.slice(0, 12);
-    const ciphertext = data.slice(12);
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ciphertext
+  )
 
-    // Generate the decryption key from password
-    const key = await generateKeyFromPassword(password);
-
-    // Decrypt the data
-    const decryptedBuffer = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv
-      },
-      key,
-      ciphertext
-    );
-
-    // Convert buffer back to string
-    return new TextDecoder().decode(decryptedBuffer);
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return '🔒 Encrypted message (incorrect password)';
-  }
+  return new TextDecoder().decode(decryptedBuffer)
 }
 
-/**
- * Check if a room requires a password and if it exists in localStorage
- */
 export function hasRoomPassword(roomId: string): boolean {
-  const key = `room_${roomId}`;
-  return localStorage.getItem(key) !== null;
+  return localStorage.getItem(`room_${roomId}`) !== null
 }
 
-/**
- * Get a room's password from localStorage
- */
 export function getRoomPassword(roomId: string): string | null {
-  const key = `room_${roomId}`;
-  return localStorage.getItem(key);
+  return localStorage.getItem(`room_${roomId}`)
 }
 
 /**
- * Create a hash from a password for room verification
- * This is different from the encryption key - it's just for verifying the password
+ * Derives a verification hash from a password using PBKDF2 (100k iterations).
+ * Stored in Firebase for room entry verification; much stronger than SHA-256.
  */
 export async function createPasswordHash(password: string): Promise<string> {
-  try {
-    // Use a simple hash for verification (not for encryption)
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password + 'room-password-salt');
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  } catch (error) {
-    console.error('Error creating password hash:', error);
-    throw error;
-  }
+  const passwordBuffer = new TextEncoder().encode(password)
+  const saltBuffer = new TextEncoder().encode('chats-pw-v2')
+
+  const importedKey = await crypto.subtle.importKey(
+    'raw',
+    passwordBuffer,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  )
+
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: saltBuffer, iterations: 100000, hash: 'SHA-256' },
+    importedKey,
+    256
+  )
+
+  return Array.from(new Uint8Array(bits)).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/**
- * Verify a password against a stored hash
- */
 export async function verifyPasswordHash(password: string, hash: string): Promise<boolean> {
-  try {
-    const computedHash = await createPasswordHash(password);
-    return computedHash === hash;
-  } catch (error) {
-    console.error('Error verifying password hash:', error);
-    return false;
-  }
+  const computed = await createPasswordHash(password)
+  return computed === hash
 }

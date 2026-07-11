@@ -39,7 +39,7 @@ export function RoomList({ onRoomSelect }: { onRoomSelect?: () => void }) {
   const router = useRouter()
 
   useEffect(() => {
-    GetRoomsFromFirebase((r) => setRooms(r))
+    return GetRoomsFromFirebase((r) => setRooms(r))
   }, [])
 
   const handleRoomClick = (room: Room) => {

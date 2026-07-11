@@ -1,7 +1,7 @@
 'use client'
 
 import { SendMessage } from "@/components/send-message"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { MessageList } from "@/components/message-view"
 import { Msg, Room } from "@/lib/data"
 import { GetMessagesFromFirebase, GetRoomDetails } from "@/lib/db"
@@ -35,6 +35,7 @@ export default function RoomPage({
   const [isPasswordValid, setIsPasswordValid] = useState(true)
   const { user, loading: authLoading, logout } = useAuth()
   const router = useRouter()
+  const messagesUnsubRef = useRef<(() => void) | undefined>(undefined)
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -42,14 +43,19 @@ export default function RoomPage({
     }
   }, [user, authLoading, router])
 
+  // Cleanup the messages subscription on unmount
+  useEffect(() => {
+    return () => { messagesUnsubRef.current?.() }
+  }, [])
+
   const loadMessages = useCallback(() => {
     if (user && roomId) {
+      messagesUnsubRef.current?.()
       setIsPasswordValid(true)
-      const unsubscribe = GetMessagesFromFirebase(roomId, (msgs) => {
+      messagesUnsubRef.current = GetMessagesFromFirebase(roomId, (msgs) => {
         setMessages(msgs)
         setIsLoading(false)
       })
-      return unsubscribe
     }
   }, [user, roomId])
 

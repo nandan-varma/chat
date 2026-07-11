@@ -41,7 +41,7 @@ export function SendMessage({ room_id, username, SendNewMessage, isDisabled = fa
 
       const password = getRoomPassword(room_id)
       if (password) {
-        content = await encryptMessage(content, password)
+        content = await encryptMessage(content, password, room_id)
         isEncrypted = true
       }
 
