@@ -1,274 +1,308 @@
-import { Room } from "@/lib/data";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+'use client'
+
+import { Room } from "@/lib/data"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { AddRoom, GetRoomsFromFirebase } from "@/lib/db";
-import { createPasswordHash } from "@/lib/encryption";
-import { useAuth } from "./auth-provider";
-import { v4 } from "uuid";
-import { Checkbox } from "@/components/ui/checkbox";
+import { AddRoom, GetRoomsFromFirebase } from "@/lib/db"
+import { createPasswordHash } from "@/lib/encryption"
+import { useAuth } from "./auth-provider"
+import { useToast } from "@/components/ui/use-toast"
+import { v4 } from "uuid"
+import { Lock, LogOut, MessageSquare, Plus } from "lucide-react"
+
+const ROOM_COLORS = [
+  'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500',
+  'bg-teal-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-pink-500',
+]
+function getRoomColor(name: string) {
+  return ROOM_COLORS[name.charCodeAt(0) % ROOM_COLORS.length]
+}
 
 export function RoomList({ onRoomSelect }: { onRoomSelect?: () => void }) {
-  const [rooms, SetRooms] = useState<Room[]>([]);
-  const [open, setOpen] = useState(false);
-  const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
-  const router = useRouter();
+  const [rooms, setRooms] = useState<Room[]>([])
+  const [createOpen, setCreateOpen] = useState(false)
+  const [passwordRoom, setPasswordRoom] = useState<Room | null>(null)
+  const { user, logout } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
-    GetRoomsFromFirebase((RoomsInFirebase) => {
-      SetRooms(RoomsInFirebase);
-    });
+    GetRoomsFromFirebase((r) => setRooms(r))
   }, [])
 
-  const handleRoomClick = (room: Room, e: React.MouseEvent) => {
-    e.preventDefault();
-
+  const handleRoomClick = (room: Room) => {
     if (room.isPasswordProtected) {
-      // Show password prompt for protected rooms
-      setSelectedRoom(room);
-      setPasswordPromptOpen(true);
+      setPasswordRoom(room)
     } else {
-      // Navigate directly to non-protected rooms
-      router.push(`/room/${room.id}`);
-      onRoomSelect?.(); // Close sidebar on mobile
+      router.push(`/room/${room.id}`)
+      onRoomSelect?.()
     }
-  };
+  }
+
+  const userInitial = user?.email?.[0].toUpperCase() ?? '?'
+  const userDisplay = user?.email?.split('@')[0] ?? ''
 
   return (
-    <div className="h-full bg-background flex flex-col">
-      <div className="flex-1 overflow-y-auto">
-        <h2 className="p-4 text-2xl md:text-3xl font-bold text-center border-b">Rooms</h2>
-        <nav className="grid gap-2 p-4">
-          {rooms.map((room) =>
-            <Link
-              key={room.id}
-              href={'/room/' + room.id}
-              className="p-3 bg-secondary shadow-md rounded-lg hover:bg-transparent transition-colors"
-              onClick={(e) => handleRoomClick(room, e)}
-            >
-              <div className="font-medium flex items-center gap-2 text-sm md:text-base">
-                {room.name}
-                {room.isPasswordProtected && <span className="text-amber-600">🔒</span>}
-              </div>
-              <div className="text-xs md:text-sm text-primary line-clamp-2">{room.description}</div>
-            </Link>
-          )}
-
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="mt-2">Add Room</Button>
-            </DialogTrigger>
-            <NewRoomDialog setOpen={setOpen} />
-          </Dialog>
-
-          <PasswordPromptDialog
-            open={passwordPromptOpen}
-            setOpen={setPasswordPromptOpen}
-            room={selectedRoom}
-            onRoomSelect={onRoomSelect}
-          />
-        </nav>
+    <div className="flex flex-col h-full">
+      {/* Sidebar header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+            <MessageSquare className="h-4 w-4 text-primary-foreground" />
+          </div>
+          <span className="font-semibold text-sm">Chats</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
       </div>
+
+      {/* Room list */}
+      <div className="flex-1 overflow-y-auto py-2 px-2">
+        {rooms.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+            <MessageSquare className="h-8 w-8 text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">No rooms yet</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Create one to get started
+            </p>
+          </div>
+        ) : (
+          rooms.map((room) => (
+            <button
+              key={room.id}
+              onClick={() => handleRoomClick(room)}
+              className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-accent transition-colors"
+            >
+              <div
+                className={`h-9 w-9 rounded-lg flex-shrink-0 flex items-center justify-center text-white font-semibold text-sm ${getRoomColor(room.name)}`}
+              >
+                {room.name[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium truncate">{room.name}</span>
+                  {room.isPasswordProtected && (
+                    <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                  )}
+                </div>
+                {room.description && (
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    {room.description}
+                  </p>
+                )}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+
+      {/* User footer */}
+      <div className="flex items-center gap-2.5 px-3 py-3 border-t flex-shrink-0">
+        <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold flex-shrink-0">
+          {userInitial}
+        </div>
+        <span className="flex-1 text-sm truncate text-muted-foreground">{userDisplay}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 flex-shrink-0"
+          onClick={logout}
+          title="Sign out"
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Dialogs */}
+      <NewRoomDialog open={createOpen} setOpen={setCreateOpen} />
+      {passwordRoom && (
+        <PasswordPromptDialog
+          open={!!passwordRoom}
+          setOpen={(open) => { if (!open) setPasswordRoom(null) }}
+          room={passwordRoom}
+          onRoomSelect={onRoomSelect}
+        />
+      )}
     </div>
   )
 }
 
-const FormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string(),
-  password: z.string(),
+const CreateRoomSchema = z.object({
+  name: z.string().min(1, "Room name is required"),
+  description: z.string().optional(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 })
 
-export function NewRoomDialog({ setOpen }: { setOpen: (open: boolean) => void }) {
-  const form = useForm<z.infer<typeof FormSchema>>({
-    resolver: zodResolver(FormSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      password: "",
-    },
+function NewRoomDialog({ open, setOpen }: { open: boolean; setOpen: (open: boolean) => void }) {
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const form = useForm<z.infer<typeof CreateRoomSchema>>({
+    resolver: zodResolver(CreateRoomSchema),
+    defaultValues: { name: "", description: "", password: "" },
   })
-  const { user } = useAuth();
 
-  async function onSubmit(data: z.infer<typeof FormSchema>) {
-    // Add your form submission logic here
-    if (data.name === "") {
-      alert("You need to provide a room name");
-      return;
+  async function onSubmit(data: z.infer<typeof CreateRoomSchema>) {
+    if (!user?.email) {
+      toast({ title: "Error", description: "You must be signed in", variant: "destructive" })
+      return
     }
-
-    let email = user?.email
-    if (email === undefined || email === null) {
-      alert("you need to login in order complete this action")
-      return;
-    }
-
-    if (!data.password || data.password.length < 6) {
-      alert("Please provide a password with at least 6 characters");
-      return;
-    }
-
     try {
-      // Create password hash for the room
-      const passwordHash = await createPasswordHash(data.password);
-
+      const passwordHash = await createPasswordHash(data.password)
       const roomData: Room = {
         id: v4(),
         name: data.name,
-        description: data.description,
-        owner_id: email,
+        description: data.description ?? "",
+        owner_id: user.email,
         created_at: Date.now(),
         isPasswordProtected: true,
-        passwordHash: passwordHash,
-      };
-
-      // Store password in local storage for the creator
-      const roomKey = `room_${roomData.id}`;
-      localStorage.setItem(roomKey, data.password);
-
-      await AddRoom(roomData);
-      form.reset();
-      setOpen(false);
-    } catch (error) {
-      console.error("Error creating room:", error);
-      alert("Error creating room. Please try again.");
+        passwordHash,
+      }
+      localStorage.setItem(`room_${roomData.id}`, data.password)
+      await AddRoom(roomData)
+      form.reset()
+      setOpen(false)
+    } catch {
+      toast({ title: "Error", description: "Failed to create room. Please try again.", variant: "destructive" })
     }
   }
 
   return (
-    <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()}>
-      <DialogHeader>
-        <DialogTitle>Add New Room</DialogTitle>
-        <DialogDescription>
-          Add new room to chat rooms
-        </DialogDescription>
-      </DialogHeader>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4">
-        <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor="name" className="text-right">
-            Name
-          </Label>
-          <Input id="name" className="col-span-3" {...form.register("name", { required: true })} />
-        </div>
-        <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor="description" className="text-right">
-            Description
-          </Label>
-          <Input id="description" className="col-span-3" {...form.register("description", { required: true })} />
-        </div>
-        <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor="password" className="text-right">
-            Password
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            className="col-span-3"
-            {...form.register("password", {
-              minLength: {
-                value: 6,
-                message: "Password must be at least 6 characters"
-              }
-            })}
-          />
-          {form.formState.errors.password && (
-            <div className="col-span-4 text-right text-red-500 text-sm">
-              {form.formState.errors.password.message}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-[400px]" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>New Room</DialogTitle>
+          <DialogDescription>Create an encrypted chat room</DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Room name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Description{' '}
+                    <span className="text-muted-foreground font-normal">(optional)</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input placeholder="What's this room for?" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => { setOpen(false); form.reset() }}>
+                Cancel
+              </Button>
+              <Button type="submit">Create room</Button>
             </div>
-          )}
-        </div>
-        <Button type="submit" className="ml-auto">Save changes</Button>
-      </form>
-    </DialogContent>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-export function PasswordPromptDialog({
+function PasswordPromptDialog({
   open,
   setOpen,
   room,
-  onRoomSelect
+  onRoomSelect,
 }: {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  room: Room | null;
-  onRoomSelect?: () => void;
+  open: boolean
+  setOpen: (open: boolean) => void
+  room: Room | null
+  onRoomSelect?: () => void
 }) {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const router = useRouter();
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const router = useRouter()
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!room) return;
-
-    // Store password in localStorage if valid
-    const roomKey = `room_${room.id}`;
-    localStorage.setItem(roomKey, password);
-
-    // Navigate to the room
-    router.push(`/room/${room.id}`);
-    setOpen(false);
-    setPassword("");
-    setError("");
-    onRoomSelect?.(); // Close sidebar on mobile
-  };
+    e.preventDefault()
+    if (!room) return
+    localStorage.setItem(`room_${room.id}`, password)
+    router.push(`/room/${room.id}`)
+    setOpen(false)
+    setPassword("")
+    setError("")
+    onRoomSelect?.()
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[380px]">
         <DialogHeader>
-          <DialogTitle>Enter Room Password</DialogTitle>
+          <DialogTitle>Enter room password</DialogTitle>
           <DialogDescription>
-            This room is password-protected. Enter the password to join.
+            <span className="font-medium text-foreground">{room?.name}</span> is password protected.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="roomPassword" className="text-right">
-              Password
-            </Label>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <div className="space-y-2">
             <Input
               id="roomPassword"
               type="password"
-              className="col-span-3"
+              placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => { setPassword(e.target.value); setError("") }}
+              autoFocus
             />
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
-          {error && (
-            <div className="text-red-500 text-sm text-center">
-              {error}
-            </div>
-          )}
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">
-              Enter Room
-            </Button>
+            <Button type="submit">Join room</Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

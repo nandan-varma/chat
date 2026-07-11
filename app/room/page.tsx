@@ -1,67 +1,37 @@
 'use client'
 
 import { useEffect } from "react"
-import { RoomList } from "@/components/room-list"
 import { useAuth } from "@/components/auth-provider"
-import { Button } from "@/components/ui/button"
-import { PlusCircle, Loader2, ShieldAlert } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { Card } from "@/components/ui/card"
+import { MessageSquare } from "lucide-react"
 
 export default function RoomListingPage() {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/');
+      router.push('/')
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router])
 
-
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <p>Loading authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <ShieldAlert className="h-12 w-12 text-red-500" />
-          <h2 className="text-lg font-semibold">Authentication Required</h2>
-          <p className="text-gray-500 text-center max-w-md">
-            You need to be signed in to access this page
-          </p>
-          <Button onClick={() => router.push('/')}>Go to Sign In</Button>
-        </div>
-      </div>
-    );
-  }
+  if (authLoading || !user) return null
 
   return (
-    <div className="flex items-center justify-center bg-muted/20 rounded-lg p-6 md:p-12 h-full">
-      <div className="text-center">
-        <h3 className="text-lg font-medium mb-2">
-          <span className="hidden md:inline">Select a room</span>
-          <span className="md:hidden">Welcome to Chat</span>
-        </h3>
-        <p className="text-muted-foreground">
-          <span className="hidden md:inline">
-            Choose a room from the list or create a new one to start chatting
-          </span>
-          <span className="md:hidden">
-            Tap the menu button to see available rooms or create a new one
-          </span>
-        </p>
+    <div className="flex items-center justify-center h-full text-center px-6">
+      <div className="space-y-3">
+        <div className="flex justify-center">
+          <div className="h-12 w-12 rounded-2xl bg-muted flex items-center justify-center">
+            <MessageSquare className="h-6 w-6 text-muted-foreground" />
+          </div>
+        </div>
+        <div>
+          <p className="text-sm font-medium">No room selected</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Choose a room from the sidebar to start chatting
+          </p>
+        </div>
       </div>
     </div>
-  );
+  )
 }

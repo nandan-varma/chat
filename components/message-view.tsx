@@ -1,165 +1,188 @@
 'use client'
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Msg } from "@/lib/data";
-import { decryptMessage, getRoomPassword } from "@/lib/encryption";
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from 'next/navigation';
+import { Msg } from "@/lib/data"
+import { decryptMessage, getRoomPassword } from "@/lib/encryption"
+import { useEffect, useRef, useState } from "react"
+import { useRouter } from 'next/navigation'
 
-interface MessageProps {
-    msg: Msg;
-    isCurrentUser: boolean;
-    password: string | null;
-    onDecryptionError: () => void;
+const AVATAR_COLORS = [
+  'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500',
+  'bg-lime-500', 'bg-green-500', 'bg-teal-500', 'bg-sky-500',
+  'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-pink-500',
+]
+
+function getAvatarColor(email: string) {
+  return AVATAR_COLORS[email.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-const Message = ({ msg, isCurrentUser, password, onDecryptionError }: MessageProps) => {
-    const [decryptedContent, setDecryptedContent] = useState<string>(msg.content);
-    const [isDecrypting, setIsDecrypting] = useState<boolean>(false);
-    const [decryptionError, setDecryptionError] = useState<boolean>(false);
+function getSenderName(email: string) {
+  return email.split('@')[0]
+}
 
-    useEffect(() => {
-        async function decryptIfNeeded() {
-            // Always attempt to decrypt if password is available
-            if (msg.encrypted && password) {
-                setIsDecrypting(true);
-                setDecryptionError(false);
-                try {
-                    const decrypted = await decryptMessage(msg.content, password);
-                    setDecryptedContent(decrypted);
-                } catch (error) {
-                    console.error('Error decrypting:', error);
-                    setDecryptedContent('🔒 Could not decrypt (wrong password)');
-                    setDecryptionError(true);
-                    onDecryptionError();
-                } finally {
-                    setIsDecrypting(false);
-                }
-            } else {
-                setDecryptedContent(msg.content);
-                setDecryptionError(false);
-            }
+function formatTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+interface DecryptedMessageProps {
+  msg: Msg
+  isCurrentUser: boolean
+  password: string | null
+  showAvatar: boolean
+  showSenderName: boolean
+  onDecryptionError: () => void
+}
+
+function DecryptedMessage({
+  msg,
+  isCurrentUser,
+  password,
+  showAvatar,
+  showSenderName,
+  onDecryptionError,
+}: DecryptedMessageProps) {
+  const [content, setContent] = useState(msg.content)
+  const [decrypting, setDecrypting] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    async function decrypt() {
+      if (msg.encrypted && password) {
+        setDecrypting(true)
+        setFailed(false)
+        try {
+          setContent(await decryptMessage(msg.content, password))
+        } catch {
+          setContent('Could not decrypt message')
+          setFailed(true)
+          onDecryptionError()
+        } finally {
+          setDecrypting(false)
         }
+      } else {
+        setContent(msg.content)
+        setFailed(false)
+      }
+    }
+    decrypt()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msg.content, msg.encrypted, password])
 
-        decryptIfNeeded();
-    }, [msg.content, msg.encrypted, password]);
+  const senderName = getSenderName(msg.sender)
+  const initial = msg.sender[0].toUpperCase()
+  const avatarColor = getAvatarColor(msg.sender)
 
-    return (
-        <div className={`p-3 md:p-4 my-2 rounded-lg max-w-[85%] md:max-w-[80%] ${isCurrentUser ? 'ml-auto bg-blue-500 text-white' : 'bg-secondary'}`}>
-            {!isCurrentUser && <div className="font-semibold mb-1 text-sm md:text-base">{msg.sender}</div>}
-            <div className="break-words text-sm md:text-base">
-                {isDecrypting ? (
-                    <div className="animate-pulse">Decrypting...</div>
-                ) : (
-                    decryptedContent
-                )}
-                {msg.encrypted && (
-                    <div className={`text-xs mt-1 ${decryptionError ? 'text-red-500' : 'opacity-70'}`}>
-                        {decryptionError
-                            ? '🔒 Failed to decrypt - incorrect password'
-                            : `${password ? '🔒 ' : 'Password required'}`}
-                    </div>
-                )}
-            </div>
+  return (
+    <div className={`flex items-end gap-2 ${isCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
+      {/* Avatar — only for others, only on last message in group */}
+      <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-semibold text-white ${avatarColor} ${!isCurrentUser ? '' : 'invisible'} ${showAvatar ? 'visible' : 'invisible'}`}>
+        {initial}
+      </div>
+
+      <div className={`max-w-[72%] flex flex-col gap-1 ${isCurrentUser ? 'items-end' : 'items-start'}`}>
+        {showSenderName && !isCurrentUser && (
+          <span className="text-xs text-muted-foreground px-1">{senderName}</span>
+        )}
+        <div
+          className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words ${
+            isCurrentUser
+              ? 'bg-primary text-primary-foreground rounded-br-sm'
+              : 'bg-muted rounded-bl-sm'
+          } ${failed ? 'opacity-60 italic' : ''}`}
+        >
+          {decrypting ? (
+            <span className="opacity-60 text-xs">Decrypting…</span>
+          ) : (
+            content
+          )}
         </div>
-    );
-};
+        <span className="text-xs text-muted-foreground px-1">{formatTime(msg.timestamp)}</span>
+      </div>
+    </div>
+  )
+}
+
+interface MessageGroup {
+  sender: string
+  isCurrentUser: boolean
+  messages: Msg[]
+}
+
+function groupMessages(msgs: Msg[], username: string): MessageGroup[] {
+  const groups: MessageGroup[] = []
+  for (const msg of msgs) {
+    const isCurrentUser = msg.sender === username
+    const last = groups[groups.length - 1]
+    if (last && last.sender === msg.sender) {
+      last.messages.push(msg)
+    } else {
+      groups.push({ sender: msg.sender, isCurrentUser, messages: [msg] })
+    }
+  }
+  return groups
+}
 
 interface MessageListProps {
-    msgs: Msg[];
-    username: string;
-    onPasswordInvalid?: () => void;
-}
-
-function orderByTimestamp(messages: Msg[]) {
-    messages.sort((msg1, msg2) => {
-        return msg1.timestamp - msg2.timestamp;
-    });
-    return messages;
+  msgs: Msg[]
+  username: string
+  onPasswordInvalid?: () => void
 }
 
 export function MessageList({ username, msgs, onPasswordInvalid }: MessageListProps) {
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [roomPassword, setRoomPassword] = useState<string | null>(null);
-    const [decryptionErrors, setDecryptionErrors] = useState<number>(0);
-    const [showPasswordWarning, setShowPasswordWarning] = useState<boolean>(false);
-    const roomId = typeof window !== 'undefined' ? window.location.pathname.split('/').pop() || '' : '';
-    const router = useRouter();
+  const endRef = useRef<HTMLDivElement>(null)
+  const [roomPassword, setRoomPassword] = useState<string | null>(null)
+  const [decryptionErrors, setDecryptionErrors] = useState(0)
+  const roomId = typeof window !== 'undefined' ? window.location.pathname.split('/').pop() ?? '' : ''
+  const router = useRouter()
 
-    useEffect(() => {
-        // Scroll to bottom on new messages
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [msgs]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [msgs])
 
-    useEffect(() => {
-        // Get the room password if available
-        if (typeof window !== 'undefined' && roomId) {
-            const password = getRoomPassword(roomId);
-            setRoomPassword(password);
-        }
-    }, [roomId]);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && roomId) {
+      setRoomPassword(getRoomPassword(roomId))
+    }
+  }, [roomId])
 
-    // Track decryption errors
-    useEffect(() => {
-        const encryptedMessages = msgs.filter(m => m.encrypted).length;
-        if (decryptionErrors > 0 && encryptedMessages > 0 && decryptionErrors / encryptedMessages > 0.5) {
-            // If more than 50% of encrypted messages fail to decrypt, prompt for password
-            setShowPasswordWarning(true);
-            // Notify parent component about invalid password
-            if (onPasswordInvalid) {
-                onPasswordInvalid();
-            }
-        } else {
-            setShowPasswordWarning(false);
-        }
-    }, [decryptionErrors, msgs, onPasswordInvalid]);
+  useEffect(() => {
+    const encrypted = msgs.filter((m) => m.encrypted).length
+    if (decryptionErrors > 0 && encrypted > 0 && decryptionErrors / encrypted > 0.5) {
+      onPasswordInvalid?.()
+    }
+  }, [decryptionErrors, msgs, onPasswordInvalid])
 
-    // Function to handle decryption errors reported from Message components
-    const handleDecryptionError = () => {
-        setDecryptionErrors(prev => prev + 1);
-    };
+  const sorted = [...msgs].sort((a, b) => a.timestamp - b.timestamp)
+  const groups = groupMessages(sorted, username)
 
-    // Function to handle password retry
-    const handlePasswordRetry = () => {
-        if (typeof window !== 'undefined' && roomId) {
-            // Remove the incorrect password
-            localStorage.removeItem(`room_${roomId}`);
-            // Refresh the page to show the password dialog again
-            router.refresh();
-        }
-    };
-
-    let ordered_msgs = orderByTimestamp(msgs);
+  if (sorted.length === 0) {
     return (
-        <div className="p-3 md:p-4 space-y-2">
-            {showPasswordWarning && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-3 md:px-4 py-3 rounded relative mb-4 text-sm md:text-base">
-                    <strong className="font-bold">Incorrect password!</strong>
-                    <span className="block sm:inline"> Unable to decrypt messages with current password.</span>
-                    <button
-                        onClick={handlePasswordRetry}
-                        className="underline ml-2 font-semibold hover:text-red-800"
-                    >
-                        Try another password
-                    </button>
-                </div>
-            )}
-            <div className="pt-2">
-                {ordered_msgs.length === 0 ? (
-                    <div className="p-2 text-center text-gray-500 my-8 text-sm md:text-base">No messages yet</div>
-                ) : (
-                    ordered_msgs.map((msg) => (
-                        <Message
-                            key={msg.id}
-                            msg={msg}
-                            isCurrentUser={msg.sender === username}
-                            password={roomPassword}
-                            onDecryptionError={handleDecryptionError}
-                        />
-                    ))
-                )}
-            </div>
-            <div ref={messagesEndRef} />
+      <div className="flex items-center justify-center h-full">
+        <p className="text-sm text-muted-foreground">No messages yet. Say hello!</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      {groups.map((group, gi) => (
+        <div
+          key={`${group.sender}-${gi}`}
+          className={`flex flex-col gap-1 ${group.isCurrentUser ? 'items-end' : 'items-start'}`}
+        >
+          {group.messages.map((msg, mi) => (
+            <DecryptedMessage
+              key={msg.id}
+              msg={msg}
+              isCurrentUser={group.isCurrentUser}
+              password={roomPassword}
+              showAvatar={mi === group.messages.length - 1}
+              showSenderName={mi === 0}
+              onDecryptionError={() => setDecryptionErrors((n) => n + 1)}
+            />
+          ))}
         </div>
-    );
+      ))}
+      <div ref={endRef} />
+    </div>
+  )
 }
