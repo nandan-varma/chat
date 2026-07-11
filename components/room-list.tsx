@@ -17,7 +17,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { AddRoom, GetRoomsFromFirebase } from "@/lib/db"
-import { createPasswordHash } from "@/lib/encryption"
+import { createPasswordHash, verifyPasswordHash } from "@/lib/encryption"
 import { useAuth } from "./auth-provider"
 import { useToast } from "@/components/ui/use-toast"
 import { v4 } from "uuid"
@@ -261,17 +261,43 @@ function PasswordPromptDialog({
 }) {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [verifying, setVerifying] = useState(false)
   const router = useRouter()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!room) return
-    localStorage.setItem(`room_${room.id}`, password)
-    router.push(`/room/${room.id}`)
-    setOpen(false)
-    setPassword("")
-    setError("")
-    onRoomSelect?.()
+
+    if (!password.trim()) {
+      setError("Password is required")
+      return
+    }
+
+    if (!room.passwordHash) {
+      setError("Room configuration error")
+      return
+    }
+
+    setVerifying(true)
+    try {
+      const isValid = await verifyPasswordHash(password, room.passwordHash)
+      if (isValid) {
+        localStorage.setItem(`room_${room.id}`, password)
+        router.push(`/room/${room.id}`)
+        setOpen(false)
+        setPassword("")
+        setError("")
+        onRoomSelect?.()
+      } else {
+        setError("Incorrect password. Please try again.")
+        setPassword("")
+      }
+    } catch {
+      setError("Could not verify password. Please try again.")
+      setPassword("")
+    } finally {
+      setVerifying(false)
+    }
   }
 
   return (
@@ -292,14 +318,17 @@ function PasswordPromptDialog({
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError("") }}
               autoFocus
+              disabled={verifying}
             />
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={verifying}>
               Cancel
             </Button>
-            <Button type="submit">Join room</Button>
+            <Button type="submit" disabled={verifying}>
+              {verifying ? "Verifying…" : "Join room"}
+            </Button>
           </div>
         </form>
       </DialogContent>

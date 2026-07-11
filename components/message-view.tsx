@@ -3,7 +3,6 @@
 import { Msg } from "@/lib/data"
 import { decryptMessage, getRoomPassword } from "@/lib/encryption"
 import { useEffect, useRef, useState } from "react"
-import { useRouter } from 'next/navigation'
 
 const AVATAR_COLORS = [
   'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500',
@@ -126,24 +125,21 @@ function groupMessages(msgs: Msg[], username: string): MessageGroup[] {
 interface MessageListProps {
   msgs: Msg[]
   username: string
+  roomId: string
   onPasswordInvalid?: () => void
 }
 
-export function MessageList({ username, msgs, onPasswordInvalid }: MessageListProps) {
+export function MessageList({ username, msgs, roomId, onPasswordInvalid }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const [roomPassword, setRoomPassword] = useState<string | null>(null)
   const [decryptionErrors, setDecryptionErrors] = useState(0)
-  const roomId = typeof window !== 'undefined' ? window.location.pathname.split('/').pop() ?? '' : ''
-  const router = useRouter()
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [msgs])
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && roomId) {
-      setRoomPassword(getRoomPassword(roomId))
-    }
+    setRoomPassword(getRoomPassword(roomId))
   }, [roomId])
 
   useEffect(() => {

@@ -230,6 +230,7 @@ export default function RoomPage({
           <MessageList
             username={user.email ?? "Anonymous"}
             msgs={messages}
+            roomId={roomId}
             onPasswordInvalid={() => {
               setIsPasswordValid(false)
               setPasswordPromptOpen(true)
