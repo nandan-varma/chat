@@ -6,3 +6,6 @@ allowBuilds:
   protobufjs: true
   sharp: true
   unrs-resolver: false
+# Transitive via @firebase/firestore; pins to the first patched version of GHSA advisories.
+overrides:
+  '@grpc/grpc-js': '>=1.13.6'
